@@ -1,5 +1,7 @@
 package com.example.lockscreenquiz
 
+import android.app.KeyguardManager
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -23,6 +25,7 @@ import androidx.compose.ui.unit.sp
 
 class QuizActivity : ComponentActivity() {
     private lateinit var repository: QuizRepository
+    private var newQuestionTrigger by mutableStateOf(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,10 +36,17 @@ class QuizActivity : ComponentActivity() {
             MaterialTheme {
                 QuizScreen(
                     repository = repository,
-                    onUnlock = { finish() }
+                    triggerKey = newQuestionTrigger,
+                    onUnlock = { unlockAndClose() }
                 )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        newQuestionTrigger++
     }
 
     private fun setupLockScreenFlags() {
@@ -51,17 +61,45 @@ class QuizActivity : ComponentActivity() {
             )
         }
     }
+
+    private fun unlockAndClose() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val km = getSystemService(KeyguardManager::class.java)
+                if (km != null && km.isKeyguardLocked) {
+                    km.requestDismissKeyguard(this, null)
+                }
+            }
+        } catch (_: Exception) {
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            finishAndRemoveTask()
+        } else {
+            finish()
+        }
+    }
 }
 
 @Composable
-fun QuizScreen(repository: QuizRepository, onUnlock: () -> Unit) {
-    var currentQuestion by remember { mutableStateOf(repository.getNextQuestion()) }
-    var selectedOption by remember { mutableStateOf<Int?>(null) }
-    var isSubmitted by remember { mutableStateOf(false) }
+fun QuizScreen(
+    repository: QuizRepository,
+    triggerKey: Int = 0,
+    onUnlock: () -> Unit
+) {
+    var currentQuestion by remember(triggerKey) { mutableStateOf(repository.getNextQuestion()) }
+    var selectedOption by remember(triggerKey) { mutableStateOf<Int?>(null) }
+    var isSubmitted by remember(triggerKey) { mutableStateOf(false) }
+    val scrollState = rememberScrollState()
 
     val question = currentQuestion
     if (question == null) {
-        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF121212)), contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF121212))
+                .systemBarsPadding(),
+            contentAlignment = Alignment.Center
+        ) {
             Button(onClick = onUnlock) { Text("문제 데이터가 없습니다. 닫기") }
         }
         return
@@ -74,70 +112,91 @@ fun QuizScreen(repository: QuizRepository, onUnlock: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF121212))
-            .padding(24.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.SpaceBetween
+            .systemBarsPadding()
+            .padding(horizontal = 24.dp, vertical = 16.dp)
     ) {
-        Column {
-            // 상단 배지 영역
+        // 상단 고정 헤더 영역 (문제 번호, 배지, 우측 상단 즉시 닫기 버튼)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "문제 #${question.id} / $totalCount",
-                        color = Color(0xFF90CAF9),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    if (question.core) {
-                        Box(
-                            modifier = Modifier
-                                .background(Color(0xFFFFB300).copy(alpha = 0.2f), RoundedCornerShape(6.dp))
-                                .border(1.dp, Color(0xFFFFB300), RoundedCornerShape(6.dp))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "★ 핵심빈출",
-                                color = Color(0xFFFFD54F),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                    if (!question.subject.isNullOrBlank()) {
-                        Box(
-                            modifier = Modifier
-                                .background(Color(0xFF263238), RoundedCornerShape(6.dp))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = question.subject,
-                                color = Color(0xFFB0BEC5),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
+                Text(
+                    text = "문제 #${question.id} / $totalCount",
+                    color = Color(0xFF90CAF9),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                if (question.core) {
+                    Box(
+                        modifier = Modifier
+                            .background(Color(0xFFFFB300).copy(alpha = 0.2f), RoundedCornerShape(6.dp))
+                            .border(1.dp, Color(0xFFFFB300), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "★ 핵심빈출",
+                            color = Color(0xFFFFD54F),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
-
-                if (wrongCount > 0) {
-                    Text(
-                        text = "누적 오답: ${wrongCount}회",
-                        color = Color(0xFFEF9A9A),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                if (!question.subject.isNullOrBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .background(Color(0xFF263238), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = question.subject,
+                            color = Color(0xFFB0BEC5),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (wrongCount > 0) {
+                    Text(
+                        text = "오답 ${wrongCount}회",
+                        color = Color(0xFFEF9A9A),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                TextButton(
+                    onClick = onUnlock,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "✕ 닫기",
+                        color = Color(0xFFB0BEC5),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
 
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 중앙 스크롤 영역 (문제 지문 + 보기 + 해설)
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(scrollState)
+        ) {
             // 문제 지문
             Text(
                 text = question.question,
@@ -147,7 +206,7 @@ fun QuizScreen(repository: QuizRepository, onUnlock: () -> Unit) {
                 lineHeight = 28.sp
             )
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             // 객관식 보기 목록
             question.options.forEachIndexed { index, optionText ->
@@ -192,7 +251,7 @@ fun QuizScreen(repository: QuizRepository, onUnlock: () -> Unit) {
 
             // 해설 영역 (보기 선택 즉시 노출)
             if (isSubmitted) {
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                 val isUserCorrect = selectedOption == question.answer
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF263238)),
@@ -223,11 +282,13 @@ fun QuizScreen(repository: QuizRepository, onUnlock: () -> Unit) {
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(12.dp))
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // 하단 액션 버튼 영역
+        // 하단 고정 액션 버튼 영역 (스크롤 영역 바깥에 고정 배치 & 언제든 닫기 가능)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -245,10 +306,9 @@ fun QuizScreen(repository: QuizRepository, onUnlock: () -> Unit) {
 
             Button(
                 onClick = onUnlock,
-                enabled = isSubmitted, // 문제를 풀어야만 잠금화면 닫기 활성화 (강제 학습 모드)
+                enabled = true, // 문제를 풀지 않아도 급할 때 언제든 즉시 닫을 수 있도록 상시 활성화
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF1976D2),
-                    disabledContainerColor = Color(0xFF333333)
+                    containerColor = if (isSubmitted) Color(0xFF1976D2) else Color(0xFF455A64)
                 ),
                 modifier = Modifier.weight(1f).height(52.dp)
             ) {

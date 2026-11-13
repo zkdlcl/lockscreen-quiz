@@ -6,7 +6,7 @@ import android.content.Intent
 
 class ScreenReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_SCREEN_OFF || intent.action == Intent.ACTION_SCREEN_ON) {
+        if (intent.action == Intent.ACTION_SCREEN_ON) {
             val quizIntent = Intent(context, QuizActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
