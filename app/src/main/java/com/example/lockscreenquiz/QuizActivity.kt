@@ -68,6 +68,7 @@ fun QuizScreen(repository: QuizRepository, onUnlock: () -> Unit) {
     }
 
     val wrongCount = repository.getWrongCount(question.id)
+    val totalCount = repository.getAllQuestions().size
 
     Column(
         modifier = Modifier
@@ -84,12 +85,47 @@ fun QuizScreen(repository: QuizRepository, onUnlock: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "문제 #${question.id}",
-                    color = Color(0xFF90CAF9),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "문제 #${question.id} / $totalCount",
+                        color = Color(0xFF90CAF9),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (question.core) {
+                        Box(
+                            modifier = Modifier
+                                .background(Color(0xFFFFB300).copy(alpha = 0.2f), RoundedCornerShape(6.dp))
+                                .border(1.dp, Color(0xFFFFB300), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "★ 핵심빈출",
+                                color = Color(0xFFFFD54F),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    if (!question.subject.isNullOrBlank()) {
+                        Box(
+                            modifier = Modifier
+                                .background(Color(0xFF263238), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = question.subject,
+                                color = Color(0xFFB0BEC5),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
                 if (wrongCount > 0) {
                     Text(
                         text = "누적 오답: ${wrongCount}회",
@@ -164,7 +200,7 @@ fun QuizScreen(repository: QuizRepository, onUnlock: () -> Unit) {
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = if (isUserCorrect) "정답입니다!" else "오답입니다 (정답: ${question.answer + 1}번)",
+                            text = if (isUserCorrect) "정답입니다!" else "오답입니다 (정답: ${question.answer + 1}번 · ${question.options.getOrNull(question.answer) ?: ""})",
                             color = if (isUserCorrect) Color(0xFF81C784) else Color(0xFFE57373),
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp
@@ -176,6 +212,14 @@ fun QuizScreen(repository: QuizRepository, onUnlock: () -> Unit) {
                             fontSize = 14.sp,
                             lineHeight = 20.sp
                         )
+                        if (!question.source.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "출처: ${question.source}",
+                                color = Color(0xFF90A4AE),
+                                fontSize = 12.sp
+                            )
+                        }
                     }
                 }
             }
